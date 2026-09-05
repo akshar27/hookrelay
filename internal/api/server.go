@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/akshar27/hookrelay/internal/breaker"
 	"github.com/akshar27/hookrelay/internal/config"
 	"github.com/akshar27/hookrelay/internal/obs"
 	"github.com/akshar27/hookrelay/internal/secretbox"
@@ -25,13 +26,13 @@ type Server struct {
 	metrics  *obs.Metrics
 	secrets  *secretbox.Box
 	notifier EventNotifier
+	breakers *breaker.Registry
 	reg      *prometheus.Registry
 	handler  http.Handler
 }
 
-// New builds a Server and its route tree. notifier may be nil (fan-out then
-// falls back to the dispatcher's periodic sweep).
-func New(cfg config.Config, st *store.Store, box *secretbox.Box, log *slog.Logger, notifier EventNotifier) (*Server, error) {
+// New builds a Server and its route tree. notifier and breakers may be nil.
+func New(cfg config.Config, st *store.Store, box *secretbox.Box, breakers *breaker.Registry, log *slog.Logger, notifier EventNotifier) (*Server, error) {
 	reg := prometheus.NewRegistry()
 	reg.MustRegister(collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 
@@ -42,6 +43,7 @@ func New(cfg config.Config, st *store.Store, box *secretbox.Box, log *slog.Logge
 		metrics:  obs.NewMetrics(reg),
 		secrets:  box,
 		notifier: notifier,
+		breakers: breakers,
 		reg:      reg,
 	}
 	s.handler = s.routes()

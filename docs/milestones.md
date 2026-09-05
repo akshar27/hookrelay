@@ -43,7 +43,7 @@ Each milestone ends with passing tests and a commit
   Tests against an `httptest.Server`: 2xx→succeeded, 5xx→retry schedule,
   timeout→retry, exhausted→dead, crash (reaper) → re-queued, signature verifies.
 
-- [ ] **M5 — Circuit breaker + rate limit + delivery-time SSRF.** In-process
+- [x] **M5 — Circuit breaker + rate limit + delivery-time SSRF.** In-process
   `map[endpointID]*Breaker` (closed→open→half-open, one probe per cooldown) and
   `map[endpointID]*rate.Limiter` token buckets; breaker state snapshotted to
   `endpoints` every 5 s + on transition. Delivery-time DNS re-resolution + IP

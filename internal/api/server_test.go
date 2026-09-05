@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/akshar27/hookrelay/internal/api"
+	"github.com/akshar27/hookrelay/internal/breaker"
 	"github.com/akshar27/hookrelay/internal/config"
 	"github.com/akshar27/hookrelay/internal/dispatch"
 	"github.com/akshar27/hookrelay/internal/secretbox"
@@ -29,6 +30,7 @@ type testEnv struct {
 	st  *store.Store
 	d   *dispatch.Dispatcher
 	box *secretbox.Box
+	brk *breaker.Registry
 	log *slog.Logger
 }
 
@@ -39,10 +41,11 @@ func newTestEnv(t *testing.T) testEnv {
 	d := dispatch.New(st, logger)
 	box, err := secretbox.New(secretbox.GenerateKey())
 	require.NoError(t, err)
+	brk := breaker.NewRegistry()
 	cfg := config.Config{Env: "test", AdminToken: "test-admin-token", AllowInsecureEndpoints: true}
-	srv, err := api.New(cfg, st, box, logger, d)
+	srv, err := api.New(cfg, st, box, brk, logger, d)
 	require.NoError(t, err)
-	return testEnv{h: srv.Handler(), st: st, d: d, box: box, log: logger}
+	return testEnv{h: srv.Handler(), st: st, d: d, box: box, brk: brk, log: logger}
 }
 
 func do(t *testing.T, h http.Handler, method, path string) *httptest.ResponseRecorder {

@@ -4,7 +4,7 @@
 -- name: ClaimDueDeliveries :many
 WITH due AS (
     SELECT id FROM deliveries
-    WHERE status IN ('pending', 'failed') AND next_attempt_at <= now()
+    WHERE status IN ('pending', 'failed', 'blocked') AND next_attempt_at <= now()
     ORDER BY next_attempt_at
     FOR UPDATE SKIP LOCKED
     LIMIT sqlc.arg('batch_size')
@@ -30,6 +30,9 @@ SELECT
     e.timeout_ms     AS timeout_ms,
     e.max_attempts   AS max_attempts,
     e.max_4xx_attempts AS max_4xx_attempts,
+    e.rate_limit_rps AS rate_limit_rps,
+    e.breaker_threshold AS breaker_threshold,
+    e.breaker_cooldown_s AS breaker_cooldown_s,
     e.status         AS endpoint_status,
     e.allow_private  AS allow_private,
     ev.type          AS event_type,
@@ -65,15 +68,18 @@ SET status = 'dead', locked_until = NULL, locked_by = NULL,
     last_status_code = $2, last_error = $3
 WHERE id = $1;
 
+-- Release a claimed delivery without an HTTP attempt (paused / rate-limited):
+-- give back the attempt_count that ClaimDueDeliveries pre-charged.
 -- name: ReleaseDelivery :exec
 UPDATE deliveries
-SET status = 'pending', next_attempt_at = $2, locked_until = NULL, locked_by = NULL
+SET status = 'pending', next_attempt_at = $2, locked_until = NULL, locked_by = NULL,
+    attempt_count = GREATEST(attempt_count - 1, 0)
 WHERE id = $1;
 
 -- name: MarkDeliveryBlocked :exec
 UPDATE deliveries
 SET status = 'blocked', next_attempt_at = $2, locked_until = NULL, locked_by = NULL,
-    last_error = $3
+    last_error = $3, attempt_count = GREATEST(attempt_count - 1, 0)
 WHERE id = $1;
 
 -- Flip leases that outlived their worker back to 'failed' so they're retried.

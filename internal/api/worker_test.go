@@ -51,6 +51,8 @@ func mkEndpointOpts(t *testing.T, h http.Handler, url string, extra map[string]a
 	return out.ID, out.Secret
 }
 
+func uuidMust(s string) uuid.UUID { return uuid.MustParse(s) }
+
 func onlyDelivery(t *testing.T, st *store.Store, eventID uuid.UUID) db.Delivery {
 	t.Helper()
 	rows, err := st.Q.ListDeliveriesForEvent(context.Background(), eventID)
@@ -62,7 +64,7 @@ func onlyDelivery(t *testing.T, st *store.Store, eventID uuid.UUID) db.Delivery 
 func (e testEnv) newPool(t *testing.T, client *http.Client, backoff []time.Duration) *worker.Pool {
 	t.Helper()
 	return worker.New(e.st, e.box, e.d, e.log, worker.Options{
-		Workers: 1, BatchSize: 20, Client: client, Backoff: backoff,
+		Workers: 1, BatchSize: 20, Client: client, Backoff: backoff, Breakers: e.brk,
 	})
 }
 

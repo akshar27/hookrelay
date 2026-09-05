@@ -50,13 +50,16 @@ func viewOf(e db.Endpoint) endpointView {
 }
 
 type createEndpointReq struct {
-	Name         string          `json:"name"`
-	URL          string          `json:"url"`
-	Filter       json.RawMessage `json:"filter"`
-	RateLimitRPS *int32          `json:"rate_limit_rps"`
-	TimeoutMS    *int32          `json:"timeout_ms"`
-	MaxAttempts  *int32          `json:"max_attempts"`
-	AllowPrivate bool            `json:"allow_private"`
+	Name             string          `json:"name"`
+	URL              string          `json:"url"`
+	Filter           json.RawMessage `json:"filter"`
+	RateLimitRPS     *int32          `json:"rate_limit_rps"`
+	TimeoutMS        *int32          `json:"timeout_ms"`
+	MaxAttempts      *int32          `json:"max_attempts"`
+	Max4xxAttempts   *int32          `json:"max_4xx_attempts"`
+	BreakerThreshold *int32          `json:"breaker_threshold"`
+	BreakerCooldownS *int32          `json:"breaker_cooldown_s"`
+	AllowPrivate     bool            `json:"allow_private"`
 }
 
 func (s *Server) handleCreateEndpoint(w http.ResponseWriter, r *http.Request) {
@@ -94,9 +97,9 @@ func (s *Server) handleCreateEndpoint(w http.ResponseWriter, r *http.Request) {
 		RateLimitRps:     orDefault(req.RateLimitRPS, 0),
 		TimeoutMs:        orDefault(req.TimeoutMS, 10000),
 		MaxAttempts:      orDefault(req.MaxAttempts, 12),
-		Max4xxAttempts:   3,
-		BreakerThreshold: 5,
-		BreakerCooldownS: 60,
+		Max4xxAttempts:   orDefault(req.Max4xxAttempts, 3),
+		BreakerThreshold: orDefault(req.BreakerThreshold, 5),
+		BreakerCooldownS: orDefault(req.BreakerCooldownS, 60),
 		AllowPrivate:     req.AllowPrivate,
 	})
 	if err != nil {
@@ -230,6 +233,9 @@ func (s *Server) handleResetBreaker(w http.ResponseWriter, r *http.Request) {
 	if err := s.store.Q.ResetBreaker(r.Context(), e.ID); err != nil {
 		obsErr(w, r, err)
 		return
+	}
+	if s.breakers != nil {
+		s.breakers.RecordSuccess(e.ID) // force the in-process breaker closed too
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

@@ -46,6 +46,8 @@ type Querier interface {
 	MarkEventFannedOut(ctx context.Context, id uuid.UUID) error
 	// Flip leases that outlived their worker back to 'failed' so they're retried.
 	ReapStaleDeliveries(ctx context.Context) ([]ReapStaleDeliveriesRow, error)
+	// Release a claimed delivery without an HTTP attempt (paused / rate-limited):
+	// give back the attempt_count that ClaimDueDeliveries pre-charged.
 	ReleaseDelivery(ctx context.Context, arg ReleaseDeliveryParams) error
 	ResetBreaker(ctx context.Context, id uuid.UUID) error
 	RotateEndpointSecret(ctx context.Context, arg RotateEndpointSecretParams) (Endpoint, error)

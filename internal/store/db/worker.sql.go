@@ -16,7 +16,7 @@ import (
 const claimDueDeliveries = `-- name: ClaimDueDeliveries :many
 WITH due AS (
     SELECT id FROM deliveries
-    WHERE status IN ('pending', 'failed') AND next_attempt_at <= now()
+    WHERE status IN ('pending', 'failed', 'blocked') AND next_attempt_at <= now()
     ORDER BY next_attempt_at
     FOR UPDATE SKIP LOCKED
     LIMIT $3
@@ -71,6 +71,9 @@ SELECT
     e.timeout_ms     AS timeout_ms,
     e.max_attempts   AS max_attempts,
     e.max_4xx_attempts AS max_4xx_attempts,
+    e.rate_limit_rps AS rate_limit_rps,
+    e.breaker_threshold AS breaker_threshold,
+    e.breaker_cooldown_s AS breaker_cooldown_s,
     e.status         AS endpoint_status,
     e.allow_private  AS allow_private,
     ev.type          AS event_type,
@@ -83,20 +86,23 @@ WHERE d.id = $1
 `
 
 type GetDeliveryDispatchRow struct {
-	DeliveryID     uuid.UUID       `json:"delivery_id"`
-	AttemptCount   int32           `json:"attempt_count"`
-	EventID        uuid.UUID       `json:"event_id"`
-	EndpointID     uuid.UUID       `json:"endpoint_id"`
-	Url            string          `json:"url"`
-	SecretEnc      []byte          `json:"secret_enc"`
-	TimeoutMs      int32           `json:"timeout_ms"`
-	MaxAttempts    int32           `json:"max_attempts"`
-	Max4xxAttempts int32           `json:"max_4xx_attempts"`
-	EndpointStatus string          `json:"endpoint_status"`
-	AllowPrivate   bool            `json:"allow_private"`
-	EventType      string          `json:"event_type"`
-	Payload        json.RawMessage `json:"payload"`
-	ApiKeyID       uuid.UUID       `json:"api_key_id"`
+	DeliveryID       uuid.UUID       `json:"delivery_id"`
+	AttemptCount     int32           `json:"attempt_count"`
+	EventID          uuid.UUID       `json:"event_id"`
+	EndpointID       uuid.UUID       `json:"endpoint_id"`
+	Url              string          `json:"url"`
+	SecretEnc        []byte          `json:"secret_enc"`
+	TimeoutMs        int32           `json:"timeout_ms"`
+	MaxAttempts      int32           `json:"max_attempts"`
+	Max4xxAttempts   int32           `json:"max_4xx_attempts"`
+	RateLimitRps     int32           `json:"rate_limit_rps"`
+	BreakerThreshold int32           `json:"breaker_threshold"`
+	BreakerCooldownS int32           `json:"breaker_cooldown_s"`
+	EndpointStatus   string          `json:"endpoint_status"`
+	AllowPrivate     bool            `json:"allow_private"`
+	EventType        string          `json:"event_type"`
+	Payload          json.RawMessage `json:"payload"`
+	ApiKeyID         uuid.UUID       `json:"api_key_id"`
 }
 
 // Everything the delivery pipeline needs, in one row.
@@ -113,6 +119,9 @@ func (q *Queries) GetDeliveryDispatch(ctx context.Context, id uuid.UUID) (GetDel
 		&i.TimeoutMs,
 		&i.MaxAttempts,
 		&i.Max4xxAttempts,
+		&i.RateLimitRps,
+		&i.BreakerThreshold,
+		&i.BreakerCooldownS,
 		&i.EndpointStatus,
 		&i.AllowPrivate,
 		&i.EventType,
@@ -190,7 +199,7 @@ func (q *Queries) ListAttempts(ctx context.Context, deliveryID uuid.UUID) ([]Att
 const markDeliveryBlocked = `-- name: MarkDeliveryBlocked :exec
 UPDATE deliveries
 SET status = 'blocked', next_attempt_at = $2, locked_until = NULL, locked_by = NULL,
-    last_error = $3
+    last_error = $3, attempt_count = GREATEST(attempt_count - 1, 0)
 WHERE id = $1
 `
 
@@ -301,7 +310,8 @@ func (q *Queries) ReapStaleDeliveries(ctx context.Context) ([]ReapStaleDeliverie
 
 const releaseDelivery = `-- name: ReleaseDelivery :exec
 UPDATE deliveries
-SET status = 'pending', next_attempt_at = $2, locked_until = NULL, locked_by = NULL
+SET status = 'pending', next_attempt_at = $2, locked_until = NULL, locked_by = NULL,
+    attempt_count = GREATEST(attempt_count - 1, 0)
 WHERE id = $1
 `
 
@@ -310,6 +320,8 @@ type ReleaseDeliveryParams struct {
 	NextAttemptAt time.Time `json:"next_attempt_at"`
 }
 
+// Release a claimed delivery without an HTTP attempt (paused / rate-limited):
+// give back the attempt_count that ClaimDueDeliveries pre-charged.
 func (q *Queries) ReleaseDelivery(ctx context.Context, arg ReleaseDeliveryParams) error {
 	_, err := q.db.Exec(ctx, releaseDelivery, arg.ID, arg.NextAttemptAt)
 	return err

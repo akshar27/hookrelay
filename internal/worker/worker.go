@@ -10,17 +10,23 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math/rand/v2"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
 
+	"github.com/akshar27/hookrelay/internal/breaker"
+	"github.com/akshar27/hookrelay/internal/limiter"
 	"github.com/akshar27/hookrelay/internal/secretbox"
 	"github.com/akshar27/hookrelay/internal/signing"
+	"github.com/akshar27/hookrelay/internal/ssrf"
 	"github.com/akshar27/hookrelay/internal/store"
 	"github.com/akshar27/hookrelay/internal/store/db"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const (
@@ -44,6 +50,9 @@ type Pool struct {
 	notifier Notifier
 	log      *slog.Logger
 	client   *http.Client
+	breakers *breaker.Registry
+	limiters *limiter.Registry
+	resolver *net.Resolver
 
 	workers    int
 	batchSize  int32
@@ -59,6 +68,10 @@ type Options struct {
 	Client    *http.Client
 	// Backoff overrides the retry schedule (tests use a zero/short table).
 	Backoff []time.Duration
+	// Breakers/Limiters may be shared with the API server (so reset-breaker and
+	// the dashboard see live state). Nil creates fresh registries.
+	Breakers *breaker.Registry
+	Limiters *limiter.Registry
 }
 
 func New(st *store.Store, secrets *secretbox.Box, notifier Notifier, log *slog.Logger, opts Options) *Pool {
@@ -82,6 +95,14 @@ func New(st *store.Store, secrets *secretbox.Box, notifier Notifier, log *slog.L
 	if backoff == nil {
 		backoff = defaultBackoff
 	}
+	breakers := opts.Breakers
+	if breakers == nil {
+		breakers = breaker.NewRegistry()
+	}
+	limiters := opts.Limiters
+	if limiters == nil {
+		limiters = limiter.NewRegistry()
+	}
 	host, _ := os.Hostname()
 	return &Pool{
 		store:      st,
@@ -89,6 +110,9 @@ func New(st *store.Store, secrets *secretbox.Box, notifier Notifier, log *slog.L
 		notifier:   notifier,
 		log:        log.With("component", "worker"),
 		client:     client,
+		breakers:   breakers,
+		limiters:   limiters,
+		resolver:   net.DefaultResolver,
 		workers:    opts.Workers,
 		batchSize:  opts.BatchSize,
 		instanceID: fmt.Sprintf("%s/%d", host, os.Getpid()),
@@ -96,6 +120,9 @@ func New(st *store.Store, secrets *secretbox.Box, notifier Notifier, log *slog.L
 		now:        time.Now,
 	}
 }
+
+// Breakers exposes the breaker registry (the dashboard reads live state from it).
+func (p *Pool) Breakers() *breaker.Registry { return p.breakers }
 
 // Run starts the workers and the reaper and blocks until ctx is cancelled.
 func (p *Pool) Run(ctx context.Context) {
@@ -170,6 +197,40 @@ func (p *Pool) deliver(ctx context.Context, deliveryID uuid.UUID) {
 		return
 	}
 
+	bcfg := breakerCfg(d)
+
+	// Rate limit: reschedule a few hundred ms out, no attempt recorded.
+	if !p.limiters.Allow(d.EndpointID, d.RateLimitRps) {
+		_ = p.store.Q.ReleaseDelivery(ctx, db.ReleaseDeliveryParams{
+			ID: deliveryID, NextAttemptAt: p.now().Add(jitter(250 * time.Millisecond)),
+		})
+		return
+	}
+
+	// Circuit breaker: while open, don't attempt; one probe per cooldown.
+	if allowed, _ := p.breakers.Allow(d.EndpointID, bcfg); !allowed {
+		_ = p.store.Q.MarkDeliveryBlocked(ctx, db.MarkDeliveryBlockedParams{
+			ID: deliveryID, NextAttemptAt: p.now().Add(bcfg.Cooldown), LastError: strptr("circuit open"),
+		})
+		return
+	}
+
+	// Delivery-time SSRF re-check: resolve the host now and reject a private /
+	// metadata IP even if the DNS record changed since endpoint creation.
+	if host := hostOf(d.Url); host != "" {
+		if _, serr := ssrf.ResolveAndCheck(ctx, p.resolver, host, d.AllowPrivate); serr != nil {
+			p.recordAttempt(ctx, d, json.RawMessage(`{}`), nil, "", 0, "ssrf_blocked", serr.Error())
+			_ = p.store.Q.MarkDeliveryDead(ctx, db.MarkDeliveryDeadParams{
+				ID: deliveryID, LastError: strptr(serr.Error()),
+			})
+			p.emitDead(ctx, d, nil)
+			p.breakers.RecordFailure(d.EndpointID, bcfg)
+			p.snapshotBreaker(ctx, d, bcfg)
+			log.Warn("delivery blocked by SSRF guard", "err", serr)
+			return
+		}
+	}
+
 	secret, err := p.secrets.Open(d.SecretEnc)
 	if err != nil {
 		log.Error("cannot open endpoint secret", "err", err)
@@ -201,6 +262,7 @@ func (p *Pool) deliver(ctx context.Context, deliveryID uuid.UUID) {
 	case err != nil:
 		outcome, reason := classifyErr(err)
 		p.recordAttempt(ctx, d, headers, nil, "", duration, outcome, err.Error())
+		p.breakers.RecordFailure(d.EndpointID, bcfg)
 		p.failOrDead(ctx, d, nil, reason, err.Error())
 		log.Warn("delivery error", "outcome", outcome, "err", err)
 
@@ -212,12 +274,14 @@ func (p *Pool) deliver(ctx context.Context, deliveryID uuid.UUID) {
 		switch {
 		case resp.StatusCode >= 200 && resp.StatusCode < 300:
 			p.recordAttempt(ctx, d, headers, &code, snippet, duration, "success", "")
+			p.breakers.RecordSuccess(d.EndpointID)
 			_ = p.store.Q.MarkDeliverySucceeded(ctx, db.MarkDeliverySucceededParams{
 				ID: deliveryID, LastStatusCode: &code,
 			})
 			log.Info("delivered", "status", resp.StatusCode, "duration_ms", duration.Milliseconds())
 
 		case resp.StatusCode == http.StatusTooManyRequests:
+			// flow control, not a failure — the breaker is untouched
 			p.recordAttempt(ctx, d, headers, &code, snippet, duration, "throttled", "")
 			next := p.now().Add(retryAfter(resp.Header, backoffFor(p.backoff, d.AttemptCount)))
 			_ = p.store.Q.MarkDeliveryFailed(ctx, db.MarkDeliveryFailedParams{
@@ -227,13 +291,17 @@ func (p *Pool) deliver(ctx context.Context, deliveryID uuid.UUID) {
 
 		case resp.StatusCode >= 400 && resp.StatusCode < 500:
 			p.recordAttempt(ctx, d, headers, &code, snippet, duration, "http_error", "")
+			p.breakers.RecordFailure(d.EndpointID, bcfg)
 			p.failOrDead(ctx, d, &code, "http_error_4xx", fmt.Sprintf("endpoint returned %d", resp.StatusCode))
 
 		default: // 3xx / 5xx
 			p.recordAttempt(ctx, d, headers, &code, snippet, duration, "http_error", "")
+			p.breakers.RecordFailure(d.EndpointID, bcfg)
 			p.failOrDead(ctx, d, &code, "http_error", fmt.Sprintf("endpoint returned %d", resp.StatusCode))
 		}
 	}
+
+	p.snapshotBreaker(ctx, d, bcfg)
 }
 
 // failOrDead schedules the next attempt, or dead-letters if the cap is reached.
@@ -383,3 +451,36 @@ func retryAfter(h http.Header, fallback time.Duration) time.Duration {
 }
 
 func strptr(s string) *string { return &s }
+
+func breakerCfg(d db.GetDeliveryDispatchRow) breaker.Config {
+	return breaker.Config{
+		Threshold: int(d.BreakerThreshold),
+		Cooldown:  time.Duration(d.BreakerCooldownS) * time.Second,
+	}
+}
+
+func (p *Pool) snapshotBreaker(ctx context.Context, d db.GetDeliveryDispatchRow, cfg breaker.Config) {
+	snap := p.breakers.Snapshot(d.EndpointID, cfg)
+	var openUntil pgtype.Timestamptz
+	if snap.OpenUntil != nil {
+		openUntil = pgtype.Timestamptz{Time: *snap.OpenUntil, Valid: true}
+	}
+	_ = p.store.Q.SnapshotBreakerState(ctx, db.SnapshotBreakerStateParams{
+		ID:                  d.EndpointID,
+		BreakerState:        snap.State,
+		BreakerOpenUntil:    openUntil,
+		ConsecutiveFailures: int32(snap.ConsecFail),
+	})
+}
+
+func hostOf(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return ""
+	}
+	return u.Hostname()
+}
+
+func jitter(d time.Duration) time.Duration {
+	return d + time.Duration(rand.Int64N(int64(d)+1))
+}

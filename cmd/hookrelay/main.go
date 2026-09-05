@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/akshar27/hookrelay/internal/api"
+	"github.com/akshar27/hookrelay/internal/breaker"
 	"github.com/akshar27/hookrelay/internal/config"
 	"github.com/akshar27/hookrelay/internal/dispatch"
 	"github.com/akshar27/hookrelay/internal/obs"
@@ -60,10 +61,11 @@ func run() error {
 	dispatcher := dispatch.New(st, log)
 	go dispatcher.Run(ctx)
 
-	pool := worker.New(st, box, dispatcher, log, worker.Options{})
+	breakers := breaker.NewRegistry()
+	pool := worker.New(st, box, dispatcher, log, worker.Options{Breakers: breakers})
 	go pool.Run(ctx)
 
-	apiServer, err := api.New(cfg, st, box, log, dispatcher)
+	apiServer, err := api.New(cfg, st, box, breakers, log, dispatcher)
 	if err != nil {
 		return err
 	}
