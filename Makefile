@@ -31,3 +31,6 @@ lint: ## go vet + staticcheck
 
 clean:
 	rm -rf bin
+
+sqlc: ## Regenerate the sqlc query layer (needs sqlc installed: brew install sqlc)
+	sqlc generate

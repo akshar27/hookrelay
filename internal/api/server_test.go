@@ -10,6 +10,7 @@ import (
 
 	"github.com/akshar27/hookrelay/internal/api"
 	"github.com/akshar27/hookrelay/internal/config"
+	"github.com/akshar27/hookrelay/internal/secretbox"
 	"github.com/akshar27/hookrelay/internal/storetest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -18,8 +19,14 @@ import (
 func newTestServer(t *testing.T) http.Handler {
 	t.Helper()
 	st := storetest.New(t)
-	cfg := config.Config{Env: "test", AdminToken: "test-admin-token"}
-	return api.New(cfg, st, slog.New(slog.NewTextHandler(io.Discard, nil))).Handler()
+	cfg := config.Config{
+		Env:        "test",
+		AdminToken: "test-admin-token",
+		SecretKey:  secretbox.GenerateKey(),
+	}
+	srv, err := api.New(cfg, st, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	require.NoError(t, err)
+	return srv.Handler()
 }
 
 func do(t *testing.T, h http.Handler, method, path string) *httptest.ResponseRecorder {

@@ -1,6 +1,6 @@
 # HookRelay — Build Milestones
 
-Stack: Go 1.23 · chi · pgx/v5 · sqlc · goose · PostgreSQL 16 · slog ·
+Stack: Go 1.26 · chi · pgx/v5 · sqlc · goose · PostgreSQL 16 · slog ·
 prometheus/client_golang · HTMX + `html/template` · testcontainers-go.
 Each milestone ends with passing tests and a commit
 (author `Akshar Gothi <akshargothi70@gmail.com>`).
@@ -13,8 +13,8 @@ Each milestone ends with passing tests and a commit
   `testcontainers-go` helper, GitHub Actions (vet + staticcheck + test). One
   `GET /v1/ping` that round-trips to Postgres.
 
-- [ ] **M2 — API keys, endpoints, SSRF guard.** Migration `0001`: `api_keys`,
-  `endpoints`. sqlc wired. Auth middleware: API key (`sha256` lookup by prefix)
+- [x] **M2 — API keys, endpoints, SSRF guard.** Migration `0002`: `api_keys`,
+  `endpoints` (0001 is the baseline). sqlc wired. Auth middleware: API key (`sha256` lookup by prefix)
   for `/v1/events`, admin bearer for the rest. Endpoint CRUD with generated
   signing secret (AES-GCM sealed via `HOOKRELAY_SECRET_KEY`), compiled
   event-type filter, `rate_limit_rps` / `timeout_ms` / `max_attempts`. **SSRF
@@ -22,7 +22,7 @@ Each milestone ends with passing tests and a commit
   literals; require https unless opted out). Table-driven tests for the filter
   matcher and the SSRF classifier.
 
-- [ ] **M3 — Event ingest + idempotent fan-out.** Migration `0002`: `events`,
+- [ ] **M3 — Event ingest + idempotent fan-out.** Migration `0003`: `events`,
   `deliveries`. `POST /v1/events` → insert + `202`; dedupe on
   `(api_key_id, idempotency_key)` → `200 {deduped:true}`; 256 KB payload cap.
   Dispatcher: in-process channel of new event ids + a 30 s safety sweep of
@@ -32,7 +32,7 @@ Each milestone ends with passing tests and a commit
   Tests: dedupe, fan-out only to matching enabled endpoints, fan-out idempotent
   under double-processing.
 
-- [ ] **M4 — Worker pool, delivery, retry, dead-letter.** Migration `0003`:
+- [ ] **M4 — Worker pool, delivery, retry, dead-letter.** Migration `0004`:
   `attempts`. Claim query (`status IN ('pending','failed') AND next_attempt_at
   <= now()`, `FOR UPDATE SKIP LOCKED`, lease via `locked_until` +
   `attempt_count += 1` at claim). Delivery pipeline: resolve host, Standard

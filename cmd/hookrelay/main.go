@@ -44,9 +44,13 @@ func run() error {
 	}
 	log.Info("migrations applied")
 
+	apiServer, err := api.New(cfg, st, log)
+	if err != nil {
+		return err
+	}
 	srv := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           api.New(cfg, st, log).Handler(),
+		Handler:           apiServer.Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

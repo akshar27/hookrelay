@@ -6,12 +6,15 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/akshar27/hookrelay/internal/store/db"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// Store is a thin wrapper over a pgx connection pool.
+// Store is a thin wrapper over a pgx connection pool plus the sqlc-generated
+// query set.
 type Store struct {
 	Pool *pgxpool.Pool
+	Q    *db.Queries
 }
 
 // Open dials Postgres, verifies connectivity, and returns a Store.
@@ -34,7 +37,7 @@ func Open(ctx context.Context, databaseURL string) (*Store, error) {
 		pool.Close()
 		return nil, fmt.Errorf("ping: %w", err)
 	}
-	return &Store{Pool: pool}, nil
+	return &Store{Pool: pool, Q: db.New(pool)}, nil
 }
 
 // Ping checks the database is reachable (used by /readyz).
