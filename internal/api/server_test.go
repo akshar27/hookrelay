@@ -10,23 +10,33 @@ import (
 
 	"github.com/akshar27/hookrelay/internal/api"
 	"github.com/akshar27/hookrelay/internal/config"
+	"github.com/akshar27/hookrelay/internal/dispatch"
 	"github.com/akshar27/hookrelay/internal/secretbox"
+	"github.com/akshar27/hookrelay/internal/store"
 	"github.com/akshar27/hookrelay/internal/storetest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func newTestServer(t *testing.T) http.Handler {
+	h, _, _ := newTestEnv(t)
+	return h
+}
+
+// newTestEnv returns the handler plus the store and dispatcher, for tests that
+// need to drive fan-out or inspect rows directly.
+func newTestEnv(t *testing.T) (http.Handler, *store.Store, *dispatch.Dispatcher) {
 	t.Helper()
 	st := storetest.New(t)
+	d := dispatch.New(st, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	cfg := config.Config{
 		Env:        "test",
 		AdminToken: "test-admin-token",
 		SecretKey:  secretbox.GenerateKey(),
 	}
-	srv, err := api.New(cfg, st, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	srv, err := api.New(cfg, st, slog.New(slog.NewTextHandler(io.Discard, nil)), d)
 	require.NoError(t, err)
-	return srv.Handler()
+	return srv.Handler(), st, d
 }
 
 func do(t *testing.T, h http.Handler, method, path string) *httptest.ResponseRecorder {

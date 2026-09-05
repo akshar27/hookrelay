@@ -18,17 +18,19 @@ import (
 
 // Server wires configuration, storage, and observability into an http.Handler.
 type Server struct {
-	cfg     config.Config
-	store   *store.Store
-	log     *slog.Logger
-	metrics *obs.Metrics
-	secrets *secretbox.Box
-	reg     *prometheus.Registry
-	handler http.Handler
+	cfg      config.Config
+	store    *store.Store
+	log      *slog.Logger
+	metrics  *obs.Metrics
+	secrets  *secretbox.Box
+	notifier EventNotifier
+	reg      *prometheus.Registry
+	handler  http.Handler
 }
 
-// New builds a Server and its route tree.
-func New(cfg config.Config, st *store.Store, log *slog.Logger) (*Server, error) {
+// New builds a Server and its route tree. notifier may be nil (fan-out then
+// falls back to the dispatcher's periodic sweep).
+func New(cfg config.Config, st *store.Store, log *slog.Logger, notifier EventNotifier) (*Server, error) {
 	reg := prometheus.NewRegistry()
 	reg.MustRegister(prometheus.NewGoCollector())
 
@@ -43,12 +45,13 @@ func New(cfg config.Config, st *store.Store, log *slog.Logger) (*Server, error) 
 	}
 
 	s := &Server{
-		cfg:     cfg,
-		store:   st,
-		log:     log,
-		metrics: obs.NewMetrics(reg),
-		secrets: box,
-		reg:     reg,
+		cfg:      cfg,
+		store:    st,
+		log:      log,
+		metrics:  obs.NewMetrics(reg),
+		secrets:  box,
+		notifier: notifier,
+		reg:      reg,
 	}
 	s.handler = s.routes()
 	return s, nil
@@ -72,8 +75,8 @@ func (s *Server) routes() http.Handler {
 	r.Route("/v1", func(r chi.Router) {
 		r.Get("/ping", s.handlePing) // open smoke endpoint
 
-		// Ingest: API-key auth. Handler arrives in M3.
-		r.With(s.requireAPIKey).Post("/events", s.handleIngestStub)
+		// Ingest: API-key auth.
+		r.With(s.requireAPIKey).Post("/events", s.handleIngest)
 
 		// Admin surface: static bearer token.
 		r.Group(func(r chi.Router) {

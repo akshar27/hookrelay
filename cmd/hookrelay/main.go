@@ -12,6 +12,7 @@ import (
 
 	"github.com/akshar27/hookrelay/internal/api"
 	"github.com/akshar27/hookrelay/internal/config"
+	"github.com/akshar27/hookrelay/internal/dispatch"
 	"github.com/akshar27/hookrelay/internal/obs"
 	"github.com/akshar27/hookrelay/internal/store"
 )
@@ -44,7 +45,10 @@ func run() error {
 	}
 	log.Info("migrations applied")
 
-	apiServer, err := api.New(cfg, st, log)
+	dispatcher := dispatch.New(st, log)
+	go dispatcher.Run(ctx)
+
+	apiServer, err := api.New(cfg, st, log, dispatcher)
 	if err != nil {
 		return err
 	}

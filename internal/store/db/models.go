@@ -21,6 +21,21 @@ type ApiKey struct {
 	DisabledAt pgtype.Timestamptz `json:"disabled_at"`
 }
 
+type Delivery struct {
+	ID             uuid.UUID          `json:"id"`
+	EventID        uuid.UUID          `json:"event_id"`
+	EndpointID     uuid.UUID          `json:"endpoint_id"`
+	Status         string             `json:"status"`
+	AttemptCount   int32              `json:"attempt_count"`
+	NextAttemptAt  time.Time          `json:"next_attempt_at"`
+	LockedUntil    pgtype.Timestamptz `json:"locked_until"`
+	LockedBy       *string            `json:"locked_by"`
+	LastStatusCode *int32             `json:"last_status_code"`
+	LastError      *string            `json:"last_error"`
+	DeliveredAt    pgtype.Timestamptz `json:"delivered_at"`
+	CreatedAt      time.Time          `json:"created_at"`
+}
+
 type Endpoint struct {
 	ID                  uuid.UUID          `json:"id"`
 	Name                string             `json:"name"`
@@ -40,4 +55,15 @@ type Endpoint struct {
 	AllowPrivate        bool               `json:"allow_private"`
 	CreatedAt           time.Time          `json:"created_at"`
 	UpdatedAt           time.Time          `json:"updated_at"`
+}
+
+type Event struct {
+	ID             uuid.UUID          `json:"id"`
+	ApiKeyID       uuid.UUID          `json:"api_key_id"`
+	Type           string             `json:"type"`
+	Payload        json.RawMessage    `json:"payload"`
+	IdempotencyKey *string            `json:"idempotency_key"`
+	OccurredAt     pgtype.Timestamptz `json:"occurred_at"`
+	ReceivedAt     time.Time          `json:"received_at"`
+	FannedOut      bool               `json:"fanned_out"`
 }

@@ -11,15 +11,26 @@ import (
 )
 
 type Querier interface {
+	CountDeliveriesByStatus(ctx context.Context) ([]CountDeliveriesByStatusRow, error)
 	CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (ApiKey, error)
 	CreateEndpoint(ctx context.Context, arg CreateEndpointParams) (Endpoint, error)
 	DeleteEndpoint(ctx context.Context, id uuid.UUID) error
 	DisableAPIKey(ctx context.Context, id uuid.UUID) error
+	// Fan an event out to every enabled endpoint whose filter matches its type.
+	// Idempotent: ON CONFLICT (event_id, endpoint_id) DO NOTHING.
+	FanOutEvent(ctx context.Context, arg FanOutEventParams) (int64, error)
 	GetAPIKeyByPrefix(ctx context.Context, keyPrefix string) (ApiKey, error)
+	GetDelivery(ctx context.Context, id uuid.UUID) (Delivery, error)
 	GetEndpoint(ctx context.Context, id uuid.UUID) (Endpoint, error)
+	GetEvent(ctx context.Context, id uuid.UUID) (Event, error)
+	GetEventByIdempotencyKey(ctx context.Context, arg GetEventByIdempotencyKeyParams) (Event, error)
+	InsertEvent(ctx context.Context, arg InsertEventParams) (Event, error)
 	ListAPIKeys(ctx context.Context) ([]ListAPIKeysRow, error)
+	ListDeliveriesForEvent(ctx context.Context, eventID uuid.UUID) ([]Delivery, error)
 	ListEnabledEndpoints(ctx context.Context) ([]Endpoint, error)
 	ListEndpoints(ctx context.Context) ([]Endpoint, error)
+	ListUnfannedEventIDs(ctx context.Context, limit int32) ([]uuid.UUID, error)
+	MarkEventFannedOut(ctx context.Context, id uuid.UUID) error
 	ResetBreaker(ctx context.Context, id uuid.UUID) error
 	RotateEndpointSecret(ctx context.Context, arg RotateEndpointSecretParams) (Endpoint, error)
 	SnapshotBreakerState(ctx context.Context, arg SnapshotBreakerStateParams) error

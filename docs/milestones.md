@@ -22,7 +22,7 @@ Each milestone ends with passing tests and a commit
   literals; require https unless opted out). Table-driven tests for the filter
   matcher and the SSRF classifier.
 
-- [ ] **M3 — Event ingest + idempotent fan-out.** Migration `0003`: `events`,
+- [x] **M3 — Event ingest + idempotent fan-out.** Migration `0003`: `events`,
   `deliveries`. `POST /v1/events` → insert + `202`; dedupe on
   `(api_key_id, idempotency_key)` → `200 {deduped:true}`; 256 KB payload cap.
   Dispatcher: in-process channel of new event ids + a 30 s safety sweep of

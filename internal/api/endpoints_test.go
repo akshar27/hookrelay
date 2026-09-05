@@ -128,9 +128,9 @@ func TestAPIKeyLifecycleAndIngestAuth(t *testing.T) {
 	decode(t, rec, &key)
 	assert.Contains(t, key.APIKey, "hr_")
 
-	// valid key reaches the ingest handler (stubbed 501 in M2)
+	// valid key reaches the ingest handler
 	rec = req(t, h, http.MethodPost, "/v1/events", key.APIKey, map[string]any{"type": "x"})
-	assert.Equal(t, http.StatusNotImplemented, rec.Code)
+	assert.Equal(t, http.StatusAccepted, rec.Code)
 
 	// wrong key → 401
 	rec = req(t, h, http.MethodPost, "/v1/events", "hr_deadbeefdeadbeefdeadbeef", map[string]any{"type": "x"})
