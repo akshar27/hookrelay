@@ -38,3 +38,6 @@ WHERE e.status = 'enabled'
     )
   )
 ON CONFLICT (event_id, endpoint_id) DO NOTHING;
+
+-- name: CountEventsByType :many
+SELECT type, count(*)::bigint AS n FROM events GROUP BY type;

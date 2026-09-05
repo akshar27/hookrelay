@@ -13,6 +13,35 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countEventsByType = `-- name: CountEventsByType :many
+SELECT type, count(*)::bigint AS n FROM events GROUP BY type
+`
+
+type CountEventsByTypeRow struct {
+	Type string `json:"type"`
+	N    int64  `json:"n"`
+}
+
+func (q *Queries) CountEventsByType(ctx context.Context) ([]CountEventsByTypeRow, error) {
+	rows, err := q.db.Query(ctx, countEventsByType)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CountEventsByTypeRow{}
+	for rows.Next() {
+		var i CountEventsByTypeRow
+		if err := rows.Scan(&i.Type, &i.N); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const fanOutEvent = `-- name: FanOutEvent :execrows
 INSERT INTO deliveries (event_id, endpoint_id)
 SELECT $1, e.id

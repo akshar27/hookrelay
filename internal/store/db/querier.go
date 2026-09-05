@@ -11,7 +11,12 @@ import (
 )
 
 type Querier interface {
+	// Claim a batch of due deliveries: mark them 'delivering', take a lease, and
+	// bump attempt_count now so a crash can't cause unbounded retries. SKIP LOCKED
+	// lets many workers/instances pull disjoint batches with no coordinator.
+	ClaimDueDeliveries(ctx context.Context, arg ClaimDueDeliveriesParams) ([]uuid.UUID, error)
 	CountDeliveriesByStatus(ctx context.Context) ([]CountDeliveriesByStatusRow, error)
+	CountEventsByType(ctx context.Context) ([]CountEventsByTypeRow, error)
 	CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (ApiKey, error)
 	CreateEndpoint(ctx context.Context, arg CreateEndpointParams) (Endpoint, error)
 	DeleteEndpoint(ctx context.Context, id uuid.UUID) error
@@ -21,16 +26,27 @@ type Querier interface {
 	FanOutEvent(ctx context.Context, arg FanOutEventParams) (int64, error)
 	GetAPIKeyByPrefix(ctx context.Context, keyPrefix string) (ApiKey, error)
 	GetDelivery(ctx context.Context, id uuid.UUID) (Delivery, error)
+	// Everything the delivery pipeline needs, in one row.
+	GetDeliveryDispatch(ctx context.Context, id uuid.UUID) (GetDeliveryDispatchRow, error)
 	GetEndpoint(ctx context.Context, id uuid.UUID) (Endpoint, error)
 	GetEvent(ctx context.Context, id uuid.UUID) (Event, error)
 	GetEventByIdempotencyKey(ctx context.Context, arg GetEventByIdempotencyKeyParams) (Event, error)
+	InsertAttempt(ctx context.Context, arg InsertAttemptParams) error
 	InsertEvent(ctx context.Context, arg InsertEventParams) (Event, error)
 	ListAPIKeys(ctx context.Context) ([]ListAPIKeysRow, error)
+	ListAttempts(ctx context.Context, deliveryID uuid.UUID) ([]Attempt, error)
 	ListDeliveriesForEvent(ctx context.Context, eventID uuid.UUID) ([]Delivery, error)
 	ListEnabledEndpoints(ctx context.Context) ([]Endpoint, error)
 	ListEndpoints(ctx context.Context) ([]Endpoint, error)
 	ListUnfannedEventIDs(ctx context.Context, limit int32) ([]uuid.UUID, error)
+	MarkDeliveryBlocked(ctx context.Context, arg MarkDeliveryBlockedParams) error
+	MarkDeliveryDead(ctx context.Context, arg MarkDeliveryDeadParams) error
+	MarkDeliveryFailed(ctx context.Context, arg MarkDeliveryFailedParams) error
+	MarkDeliverySucceeded(ctx context.Context, arg MarkDeliverySucceededParams) error
 	MarkEventFannedOut(ctx context.Context, id uuid.UUID) error
+	// Flip leases that outlived their worker back to 'failed' so they're retried.
+	ReapStaleDeliveries(ctx context.Context) ([]ReapStaleDeliveriesRow, error)
+	ReleaseDelivery(ctx context.Context, arg ReleaseDeliveryParams) error
 	ResetBreaker(ctx context.Context, id uuid.UUID) error
 	RotateEndpointSecret(ctx context.Context, arg RotateEndpointSecretParams) (Endpoint, error)
 	SnapshotBreakerState(ctx context.Context, arg SnapshotBreakerStateParams) error

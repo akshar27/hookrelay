@@ -83,7 +83,8 @@ func TestIngestDedupesOnIdempotencyKey(t *testing.T) {
 }
 
 func TestFanOutOnlyToMatchingEnabledEndpoints(t *testing.T) {
-	h, st, d := newTestEnv(t)
+	e := newTestEnv(t)
+	h, st, d := e.h, e.st, e.d
 	key := mintKey(t, h)
 
 	epInvoices := mkEndpoint(t, h, "invoices", "https://a.example.com/h",
@@ -122,7 +123,8 @@ func TestFanOutOnlyToMatchingEnabledEndpoints(t *testing.T) {
 }
 
 func TestFanOutIsIdempotent(t *testing.T) {
-	h, st, d := newTestEnv(t)
+	e := newTestEnv(t)
+	h, st, d := e.h, e.st, e.d
 	key := mintKey(t, h)
 	mkEndpoint(t, h, "e1", "https://a.example.com/h", map[string]any{"mode": "all"})
 

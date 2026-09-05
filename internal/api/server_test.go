@@ -19,24 +19,30 @@ import (
 )
 
 func newTestServer(t *testing.T) http.Handler {
-	h, _, _ := newTestEnv(t)
-	return h
+	e := newTestEnv(t)
+	return e.h
 }
 
-// newTestEnv returns the handler plus the store and dispatcher, for tests that
-// need to drive fan-out or inspect rows directly.
-func newTestEnv(t *testing.T) (http.Handler, *store.Store, *dispatch.Dispatcher) {
+// testEnv bundles everything a delivery-path test needs over one Postgres.
+type testEnv struct {
+	h   http.Handler
+	st  *store.Store
+	d   *dispatch.Dispatcher
+	box *secretbox.Box
+	log *slog.Logger
+}
+
+func newTestEnv(t *testing.T) testEnv {
 	t.Helper()
 	st := storetest.New(t)
-	d := dispatch.New(st, slog.New(slog.NewTextHandler(io.Discard, nil)))
-	cfg := config.Config{
-		Env:        "test",
-		AdminToken: "test-admin-token",
-		SecretKey:  secretbox.GenerateKey(),
-	}
-	srv, err := api.New(cfg, st, slog.New(slog.NewTextHandler(io.Discard, nil)), d)
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	d := dispatch.New(st, logger)
+	box, err := secretbox.New(secretbox.GenerateKey())
 	require.NoError(t, err)
-	return srv.Handler(), st, d
+	cfg := config.Config{Env: "test", AdminToken: "test-admin-token", AllowInsecureEndpoints: true}
+	srv, err := api.New(cfg, st, box, logger, d)
+	require.NoError(t, err)
+	return testEnv{h: srv.Handler(), st: st, d: d, box: box, log: logger}
 }
 
 func do(t *testing.T, h http.Handler, method, path string) *httptest.ResponseRecorder {

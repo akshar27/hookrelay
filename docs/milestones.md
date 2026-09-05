@@ -32,7 +32,7 @@ Each milestone ends with passing tests and a commit
   Tests: dedupe, fan-out only to matching enabled endpoints, fan-out idempotent
   under double-processing.
 
-- [ ] **M4 — Worker pool, delivery, retry, dead-letter.** Migration `0004`:
+- [x] **M4 — Worker pool, delivery, retry, dead-letter.** Migration `0004`:
   `attempts`. Claim query (`status IN ('pending','failed') AND next_attempt_at
   <= now()`, `FOR UPDATE SKIP LOCKED`, lease via `locked_until` +
   `attempt_count += 1` at claim). Delivery pipeline: resolve host, Standard

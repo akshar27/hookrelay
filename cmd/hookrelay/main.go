@@ -14,7 +14,9 @@ import (
 	"github.com/akshar27/hookrelay/internal/config"
 	"github.com/akshar27/hookrelay/internal/dispatch"
 	"github.com/akshar27/hookrelay/internal/obs"
+	"github.com/akshar27/hookrelay/internal/secretbox"
 	"github.com/akshar27/hookrelay/internal/store"
+	"github.com/akshar27/hookrelay/internal/worker"
 )
 
 func main() {
@@ -45,10 +47,23 @@ func run() error {
 	}
 	log.Info("migrations applied")
 
+	keyB64 := cfg.SecretKey
+	if keyB64 == "" {
+		keyB64 = secretbox.GenerateKey()
+		log.Warn("HOOKRELAY_SECRET_KEY not set — using an ephemeral key; sealed secrets won't survive a restart")
+	}
+	box, err := secretbox.New(keyB64)
+	if err != nil {
+		return err
+	}
+
 	dispatcher := dispatch.New(st, log)
 	go dispatcher.Run(ctx)
 
-	apiServer, err := api.New(cfg, st, log, dispatcher)
+	pool := worker.New(st, box, dispatcher, log, worker.Options{})
+	go pool.Run(ctx)
+
+	apiServer, err := api.New(cfg, st, box, log, dispatcher)
 	if err != nil {
 		return err
 	}

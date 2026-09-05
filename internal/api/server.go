@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
@@ -30,19 +31,9 @@ type Server struct {
 
 // New builds a Server and its route tree. notifier may be nil (fan-out then
 // falls back to the dispatcher's periodic sweep).
-func New(cfg config.Config, st *store.Store, log *slog.Logger, notifier EventNotifier) (*Server, error) {
+func New(cfg config.Config, st *store.Store, box *secretbox.Box, log *slog.Logger, notifier EventNotifier) (*Server, error) {
 	reg := prometheus.NewRegistry()
-	reg.MustRegister(prometheus.NewGoCollector())
-
-	keyB64 := cfg.SecretKey
-	if keyB64 == "" {
-		keyB64 = secretbox.GenerateKey()
-		log.Warn("HOOKRELAY_SECRET_KEY not set — using an ephemeral key; sealed secrets won't survive a restart")
-	}
-	box, err := secretbox.New(keyB64)
-	if err != nil {
-		return nil, err
-	}
+	reg.MustRegister(collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 
 	s := &Server{
 		cfg:      cfg,
@@ -61,7 +52,6 @@ func (s *Server) Handler() http.Handler { return s.handler }
 
 func (s *Server) routes() http.Handler {
 	r := chi.NewRouter()
-	r.Use(middleware.RealIP)
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Recoverer)
 	r.Use(s.requestLogger)

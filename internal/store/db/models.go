@@ -21,6 +21,19 @@ type ApiKey struct {
 	DisabledAt pgtype.Timestamptz `json:"disabled_at"`
 }
 
+type Attempt struct {
+	ID              int64           `json:"id"`
+	DeliveryID      uuid.UUID       `json:"delivery_id"`
+	N               int32           `json:"n"`
+	RequestHeaders  json.RawMessage `json:"request_headers"`
+	StatusCode      *int32          `json:"status_code"`
+	ResponseSnippet *string         `json:"response_snippet"`
+	DurationMs      int32           `json:"duration_ms"`
+	Outcome         string          `json:"outcome"`
+	Error           *string         `json:"error"`
+	AttemptedAt     time.Time       `json:"attempted_at"`
+}
+
 type Delivery struct {
 	ID             uuid.UUID          `json:"id"`
 	EventID        uuid.UUID          `json:"event_id"`
