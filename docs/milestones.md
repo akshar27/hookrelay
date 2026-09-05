@@ -5,7 +5,7 @@ prometheus/client_golang · HTMX + `html/template` · testcontainers-go.
 Each milestone ends with passing tests and a commit
 (author `Akshar Gothi <akshargothi70@gmail.com>`).
 
-- [ ] **M1 — Skeleton + ops.** Go module, layered packages
+- [x] **M1 — Skeleton + ops.** Go module, layered packages
   (`cmd/hookrelay`, `internal/{api,store,config,worker}`), `chi` server, env
   config, `pgxpool`, goose migrations embedded + run on boot, `slog` JSON
   logging with request ids, `/healthz` `/readyz` (DB ping) `/metrics`
