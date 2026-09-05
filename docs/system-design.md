@@ -588,9 +588,20 @@ equivalents — this defeats DNS-rebinding. A per-endpoint `allow_private` flag
 | Tests | stdlib `testing` + `httptest` + `testcontainers-go` (Postgres) | Real Postgres in tests via a throwaway container; `httptest.Server` as the fake customer endpoint. |
 | Config | env vars via `caarlos0/env` or stdlib | 12-factor. |
 
-**Recommendation (confirm at stage 4):** Go + chi + pgx/sqlc + Postgres +
-HTMX dashboard. Rationale for the language choice belongs in the
-language-decision step, but Go is the entire point of this project.
+**Decision (stage 4 — confirmed):** Go 1.23 + chi + pgx/sqlc + Postgres +
+HTMX/`html/template` dashboard.
+
+Rationale: this project *is* concurrency infrastructure — a worker pool with
+per-request timeouts, cancellation, leases, and backpressure. Go's goroutines +
+channels + `context` are the idiomatic fit, `net/http` gives both the server and
+a tunable client, and it ships as one static binary. It's the deliberate
+backend/platform piece of the portfolio and the one language gap (vs. the
+Python/TS projects) that backend-infra JDs in SF ask for. Runner-up: Rust
+(axum + tokio + sqlx) — same story, better safety guarantees, but a steeper ramp
+and less common in the target JDs, so it would cost build time without adding
+signal. The HTMX dashboard is chosen over React on purpose: one binary, one
+language, server-rendered — a "Go end-to-end" signal and a contrast to the two
+React dashboards already in the portfolio.
 
 ## 11. What this demonstrates on a résumé
 

@@ -1,0 +1,25 @@
+# Binaries
+/bin/
+/hookrelay
+*.exe
+*.test
+*.out
+
+# Go
+/vendor/
+go.work
+go.work.sum
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Coverage
+coverage.txt
+coverage.html
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
