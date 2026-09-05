@@ -58,7 +58,7 @@ WHERE e.status = 'enabled'
              AND left($2::text, length(pat) - 1) = left(pat, length(pat) - 1))
     )
   )
-ON CONFLICT (event_id, endpoint_id) DO NOTHING
+ON CONFLICT (event_id, endpoint_id) WHERE NOT is_replay DO NOTHING
 `
 
 type FanOutEventParams struct {

@@ -21,6 +21,7 @@ type Querier interface {
 	CreateEndpoint(ctx context.Context, arg CreateEndpointParams) (Endpoint, error)
 	DeleteEndpoint(ctx context.Context, id uuid.UUID) error
 	DisableAPIKey(ctx context.Context, id uuid.UUID) error
+	EndpointHealth(ctx context.Context, id uuid.UUID) (EndpointHealthRow, error)
 	// Fan an event out to every enabled endpoint whose filter matches its type.
 	// Idempotent: ON CONFLICT (event_id, endpoint_id) DO NOTHING.
 	FanOutEvent(ctx context.Context, arg FanOutEventParams) (int64, error)
@@ -35,9 +36,12 @@ type Querier interface {
 	InsertEvent(ctx context.Context, arg InsertEventParams) (Event, error)
 	ListAPIKeys(ctx context.Context) ([]ListAPIKeysRow, error)
 	ListAttempts(ctx context.Context, deliveryID uuid.UUID) ([]Attempt, error)
+	// Read-side queries: filtered + keyset-paginated feeds, replay, endpoint health.
+	ListDeliveries(ctx context.Context, arg ListDeliveriesParams) ([]Delivery, error)
 	ListDeliveriesForEvent(ctx context.Context, eventID uuid.UUID) ([]Delivery, error)
 	ListEnabledEndpoints(ctx context.Context) ([]Endpoint, error)
 	ListEndpoints(ctx context.Context) ([]Endpoint, error)
+	ListEvents(ctx context.Context, arg ListEventsParams) ([]Event, error)
 	ListUnfannedEventIDs(ctx context.Context, limit int32) ([]uuid.UUID, error)
 	MarkDeliveryBlocked(ctx context.Context, arg MarkDeliveryBlockedParams) error
 	MarkDeliveryDead(ctx context.Context, arg MarkDeliveryDeadParams) error
@@ -49,6 +53,7 @@ type Querier interface {
 	// Release a claimed delivery without an HTTP attempt (paused / rate-limited):
 	// give back the attempt_count that ClaimDueDeliveries pre-charged.
 	ReleaseDelivery(ctx context.Context, arg ReleaseDeliveryParams) error
+	ReplayDelivery(ctx context.Context, id uuid.UUID) (Delivery, error)
 	ResetBreaker(ctx context.Context, id uuid.UUID) error
 	RotateEndpointSecret(ctx context.Context, arg RotateEndpointSecretParams) (Endpoint, error)
 	SnapshotBreakerState(ctx context.Context, arg SnapshotBreakerStateParams) error

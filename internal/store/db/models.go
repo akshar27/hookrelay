@@ -47,6 +47,8 @@ type Delivery struct {
 	LastError      *string            `json:"last_error"`
 	DeliveredAt    pgtype.Timestamptz `json:"delivered_at"`
 	CreatedAt      time.Time          `json:"created_at"`
+	IsReplay       bool               `json:"is_replay"`
+	ReplayOf       pgtype.UUID        `json:"replay_of"`
 }
 
 type Endpoint struct {

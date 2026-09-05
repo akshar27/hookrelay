@@ -75,6 +75,14 @@ func (s *Server) routes() http.Handler {
 			r.Use(s.requireAdmin)
 			r.Route("/endpoints", s.routeEndpoints)
 			r.Route("/api-keys", s.routeAPIKeys)
+			r.Route("/deliveries", s.routeDeliveries)
+
+			// events: the collection GET and item routes are admin; the
+			// collection POST (ingest, above) is API-key. Registered flat so
+			// the two POST /events handlers don't collide via a Mount.
+			r.Get("/events", s.handleListEvents)
+			r.Get("/events/{id}", s.handleGetEvent)
+			r.Post("/events/{id}/replay", s.handleReplayEvent)
 		})
 	})
 

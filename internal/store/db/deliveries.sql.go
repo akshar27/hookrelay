@@ -41,7 +41,7 @@ func (q *Queries) CountDeliveriesByStatus(ctx context.Context) ([]CountDeliverie
 }
 
 const getDelivery = `-- name: GetDelivery :one
-SELECT id, event_id, endpoint_id, status, attempt_count, next_attempt_at, locked_until, locked_by, last_status_code, last_error, delivered_at, created_at FROM deliveries WHERE id = $1
+SELECT id, event_id, endpoint_id, status, attempt_count, next_attempt_at, locked_until, locked_by, last_status_code, last_error, delivered_at, created_at, is_replay, replay_of FROM deliveries WHERE id = $1
 `
 
 func (q *Queries) GetDelivery(ctx context.Context, id uuid.UUID) (Delivery, error) {
@@ -60,12 +60,14 @@ func (q *Queries) GetDelivery(ctx context.Context, id uuid.UUID) (Delivery, erro
 		&i.LastError,
 		&i.DeliveredAt,
 		&i.CreatedAt,
+		&i.IsReplay,
+		&i.ReplayOf,
 	)
 	return i, err
 }
 
 const listDeliveriesForEvent = `-- name: ListDeliveriesForEvent :many
-SELECT id, event_id, endpoint_id, status, attempt_count, next_attempt_at, locked_until, locked_by, last_status_code, last_error, delivered_at, created_at FROM deliveries WHERE event_id = $1 ORDER BY created_at
+SELECT id, event_id, endpoint_id, status, attempt_count, next_attempt_at, locked_until, locked_by, last_status_code, last_error, delivered_at, created_at, is_replay, replay_of FROM deliveries WHERE event_id = $1 ORDER BY created_at
 `
 
 func (q *Queries) ListDeliveriesForEvent(ctx context.Context, eventID uuid.UUID) ([]Delivery, error) {
@@ -90,6 +92,8 @@ func (q *Queries) ListDeliveriesForEvent(ctx context.Context, eventID uuid.UUID)
 			&i.LastError,
 			&i.DeliveredAt,
 			&i.CreatedAt,
+			&i.IsReplay,
+			&i.ReplayOf,
 		); err != nil {
 			return nil, err
 		}

@@ -37,7 +37,7 @@ WHERE e.status = 'enabled'
              AND left(sqlc.arg('event_type')::text, length(pat) - 1) = left(pat, length(pat) - 1))
     )
   )
-ON CONFLICT (event_id, endpoint_id) DO NOTHING;
+ON CONFLICT (event_id, endpoint_id) WHERE NOT is_replay DO NOTHING;
 
 -- name: CountEventsByType :many
 SELECT type, count(*)::bigint AS n FROM events GROUP BY type;

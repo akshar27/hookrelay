@@ -52,7 +52,7 @@ Each milestone ends with passing tests and a commit
   fails / half-open probe closes or re-opens / blocked deliveries carry no
   attempt row; limiter reschedules without an attempt; rebinding IP is blocked.
 
-- [ ] **M6 — Query API + replay + endpoint ops.** `GET /v1/deliveries`
+- [x] **M6 — Query API + replay + endpoint ops.** `GET /v1/deliveries`
   (filters + keyset cursor), `GET /v1/deliveries/{id}` (full attempt timeline),
   `GET /v1/events{,/{id}}`, `POST /v1/deliveries/{id}/replay` (new row),
   `POST /v1/events/{id}/replay` (re-fan-out to current endpoints),

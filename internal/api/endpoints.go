@@ -39,6 +39,7 @@ type endpointView struct {
 	AllowPrivate bool            `json:"allow_private"`
 	CreatedAt    time.Time       `json:"created_at"`
 	Secret       string          `json:"secret,omitempty"` // only on create / rotate
+	Health       *endpointHealth `json:"health,omitempty"` // only on GET /{id}
 }
 
 func viewOf(e db.Endpoint) endpointView {
@@ -129,7 +130,27 @@ func (s *Server) handleGetEndpoint(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	writeJSON(w, http.StatusOK, viewOf(e))
+	v := viewOf(e)
+	if health, err := s.store.Q.EndpointHealth(r.Context(), e.ID); err == nil {
+		rate := 1.0
+		if health.Attempts24h > 0 {
+			rate = float64(health.Successes24h) / float64(health.Attempts24h)
+		}
+		v.Health = &endpointHealth{
+			BreakerState: health.BreakerState,
+			SuccessRate:  rate,
+			Attempts24h:  health.Attempts24h,
+			P95MS:        health.P95Ms24h,
+		}
+	}
+	writeJSON(w, http.StatusOK, v)
+}
+
+type endpointHealth struct {
+	BreakerState string  `json:"breaker_state"`
+	SuccessRate  float64 `json:"success_rate_24h"`
+	Attempts24h  int64   `json:"attempts_24h"`
+	P95MS        int32   `json:"p95_ms_24h"`
 }
 
 type updateEndpointReq struct {

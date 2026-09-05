@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tidwall/gjson"
 )
 
 // --- helpers ------------------------------------------------------------
@@ -53,12 +54,24 @@ func mkEndpointOpts(t *testing.T, h http.Handler, url string, extra map[string]a
 
 func uuidMust(s string) uuid.UUID { return uuid.MustParse(s) }
 
+// gj parses a recorder's JSON body for gjson path access in tests.
+func gj(rec *httptest.ResponseRecorder) gjson.Result {
+	return gjson.ParseBytes(rec.Body.Bytes())
+}
+
 func onlyDelivery(t *testing.T, st *store.Store, eventID uuid.UUID) db.Delivery {
 	t.Helper()
 	rows, err := st.Q.ListDeliveriesForEvent(context.Background(), eventID)
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
 	return rows[0]
+}
+
+func mustDeliveries(t *testing.T, e testEnv, eventID uuid.UUID) []db.Delivery {
+	t.Helper()
+	rows, err := e.st.Q.ListDeliveriesForEvent(context.Background(), eventID)
+	require.NoError(t, err)
+	return rows
 }
 
 func (e testEnv) newPool(t *testing.T, client *http.Client, backoff []time.Duration) *worker.Pool {
