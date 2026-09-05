@@ -18,6 +18,7 @@ import (
 	"github.com/akshar27/hookrelay/internal/secretbox"
 	"github.com/akshar27/hookrelay/internal/store"
 	"github.com/akshar27/hookrelay/internal/worker"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 func main() {
@@ -58,14 +59,20 @@ func run() error {
 		return err
 	}
 
+	reg := prometheus.NewRegistry()
+	metrics := obs.NewMetrics(reg)
+
 	dispatcher := dispatch.New(st, log)
 	go dispatcher.Run(ctx)
 
 	breakers := breaker.NewRegistry()
-	pool := worker.New(st, box, dispatcher, log, worker.Options{Breakers: breakers})
+	pool := worker.New(st, box, dispatcher, log, worker.Options{Breakers: breakers, Metrics: metrics})
 	go pool.Run(ctx)
 
-	apiServer, err := api.New(cfg, st, box, breakers, log, dispatcher)
+	apiServer, err := api.New(cfg, api.Deps{
+		Store: st, Secrets: box, Breakers: breakers, Notifier: dispatcher,
+		Metrics: metrics, Registry: reg, Log: log,
+	})
 	if err != nil {
 		return err
 	}

@@ -1,0 +1,19 @@
+{{define "content"}}
+<div class="panel">
+  <h2>Event {{slice8 .Ev.ID}} <span class="mono">{{.Ev.Type}}</span></h2>
+  <div class="kv">
+    <span class="k">id</span><span class="mono">{{.Ev.ID}}</span>
+    <span class="k">received</span><span class="mono">{{.Received}}</span>
+  </div>
+  <div class="actions">
+    <button class="primary" hx-post="/events/{{.Ev.ID}}/replay" hx-swap="none" hx-on::after-request="location.reload()">Re-fan-out</button>
+  </div>
+  <h2 style="margin-top:16px">Payload</h2>
+  <div class="snippet">{{.Payload}}</div>
+</div>
+
+<div class="panel">
+  <h2>Deliveries</h2>
+  {{template "deliveriesTable" .Deliveries}}
+</div>
+{{end}}

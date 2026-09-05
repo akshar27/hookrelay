@@ -1,0 +1,36 @@
+{{define "content"}}
+<div class="cards">
+  {{range .StatusCounts}}
+  <div class="card"><div class="n">{{.N}}</div><div class="l">{{.Status}}</div></div>
+  {{end}}
+</div>
+
+<div class="panel">
+  <h2>Endpoints</h2>
+  <div class="scroll-x">
+  <table>
+    <thead><tr><th>Name</th><th>URL</th><th>Status</th><th>Circuit</th><th>24h success</th><th>p95</th></tr></thead>
+    <tbody>
+      {{range .Endpoints}}
+      <tr>
+        <td><a href="/endpoints/{{.ID}}">{{.Name}}</a></td>
+        <td class="mono">{{.URL}}</td>
+        <td>{{template "statusPill" .Status}}</td>
+        <td>{{template "circuitPill" .BreakerState}}</td>
+        <td class="mono">{{.SuccessPct}}</td>
+        <td class="mono">{{.P95MS}}ms</td>
+      </tr>
+      {{else}}
+      <tr><td colspan="6" class="muted">no endpoints — create one via <span class="mono">POST /v1/endpoints</span></td></tr>
+      {{end}}
+    </tbody>
+  </table>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>Recent deliveries</h2>
+  {{template "deliveriesTable" .Recent}}
+</div>
+{{end}}
+

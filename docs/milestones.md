@@ -60,7 +60,7 @@ Each milestone ends with passing tests and a commit
   (`paused`). Endpoint health summary (24 h success rate, p95 attempt latency,
   circuit state). Tests for pagination, both replay paths, rotate-secret.
 
-- [ ] **M7 — Dashboard + metrics + polish.** HTMX + `html/template` pages:
+- [x] **M7 — Dashboard + metrics + polish.** HTMX + `html/template` pages:
   deliveries feed with filters, per-delivery attempt timeline, endpoint health
   board (circuit state, success rate, p95), replay button, pause/resume, secret
   rotation. Prometheus metrics (deliveries by status, attempt-latency

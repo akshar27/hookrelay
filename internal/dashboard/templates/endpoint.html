@@ -1,0 +1,30 @@
+{{define "content"}}
+<div class="panel">
+  <h2>{{.E.Name}} {{template "statusPill" .E.Status}} {{template "circuitPill" .E.BreakerState}}</h2>
+  <div class="kv">
+    <span class="k">id</span><span class="mono">{{.E.ID}}</span>
+    <span class="k">url</span><span class="mono">{{.E.Url}}</span>
+    <span class="k">filter</span><span class="mono">{{.Filter}}</span>
+    <span class="k">rate limit</span><span class="mono">{{if gt .E.RateLimitRps 0}}{{.E.RateLimitRps}} rps{{else}}unlimited{{end}}</span>
+    <span class="k">timeout</span><span class="mono">{{.E.TimeoutMs}} ms</span>
+    <span class="k">max attempts</span><span class="mono">{{.E.MaxAttempts}}</span>
+    <span class="k">24h success</span><span class="mono">{{.SuccessPct}} ({{.Attempts24h}} attempts)</span>
+    <span class="k">p95 latency</span><span class="mono">{{.P95MS}} ms</span>
+  </div>
+  <div class="actions">
+    {{if eq .E.Status "paused"}}
+      <button hx-patch="/endpoints/{{.E.ID}}" hx-vals='{"status":"enabled"}' hx-swap="none" hx-on::after-request="location.reload()">Resume</button>
+    {{else}}
+      <button class="danger" hx-patch="/endpoints/{{.E.ID}}" hx-vals='{"status":"paused"}' hx-swap="none" hx-on::after-request="location.reload()">Pause</button>
+    {{end}}
+    <button hx-post="/endpoints/{{.E.ID}}/reset-breaker" hx-swap="none" hx-on::after-request="location.reload()">Reset circuit</button>
+    <button hx-post="/endpoints/{{.E.ID}}/rotate-secret" hx-target="#rotated" hx-swap="innerHTML">Rotate secret</button>
+  </div>
+  <p id="rotated" class="mono muted"></p>
+</div>
+
+<div class="panel">
+  <h2>Recent deliveries</h2>
+  {{template "deliveriesTable" .Recent}}
+</div>
+{{end}}

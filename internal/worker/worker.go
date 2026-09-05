@@ -20,6 +20,7 @@ import (
 
 	"github.com/akshar27/hookrelay/internal/breaker"
 	"github.com/akshar27/hookrelay/internal/limiter"
+	"github.com/akshar27/hookrelay/internal/obs"
 	"github.com/akshar27/hookrelay/internal/secretbox"
 	"github.com/akshar27/hookrelay/internal/signing"
 	"github.com/akshar27/hookrelay/internal/ssrf"
@@ -53,6 +54,7 @@ type Pool struct {
 	breakers *breaker.Registry
 	limiters *limiter.Registry
 	resolver *net.Resolver
+	metrics  *obs.Metrics
 
 	workers    int
 	batchSize  int32
@@ -72,6 +74,7 @@ type Options struct {
 	// the dashboard see live state). Nil creates fresh registries.
 	Breakers *breaker.Registry
 	Limiters *limiter.Registry
+	Metrics  *obs.Metrics
 }
 
 func New(st *store.Store, secrets *secretbox.Box, notifier Notifier, log *slog.Logger, opts Options) *Pool {
@@ -113,6 +116,7 @@ func New(st *store.Store, secrets *secretbox.Box, notifier Notifier, log *slog.L
 		breakers:   breakers,
 		limiters:   limiters,
 		resolver:   net.DefaultResolver,
+		metrics:    opts.Metrics,
 		workers:    opts.Workers,
 		batchSize:  opts.BatchSize,
 		instanceID: fmt.Sprintf("%s/%d", host, os.Getpid()),
@@ -134,10 +138,30 @@ func (p *Pool) Run(ctx context.Context) {
 		}()
 	}
 	go p.reaperLoop(ctx)
+	if p.metrics != nil {
+		go p.metricsLoop(ctx)
+	}
 
 	<-ctx.Done()
 	for i := 0; i < p.workers; i++ {
 		<-done
+	}
+}
+
+func (p *Pool) metricsLoop(ctx context.Context) {
+	t := time.NewTicker(15 * time.Second)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			if rows, err := p.store.Q.CountDeliveriesByStatus(ctx); err == nil {
+				for _, r := range rows {
+					p.metrics.DeliveriesByStatus.WithLabelValues(r.Status).Set(float64(r.N))
+				}
+			}
+		}
 	}
 }
 
@@ -358,6 +382,10 @@ func (p *Pool) recordAttempt(ctx context.Context, d db.GetDeliveryDispatchRow, h
 	var snip *string
 	if snippet != "" {
 		snip = &snippet
+	}
+	if p.metrics != nil {
+		p.metrics.AttemptsTotal.WithLabelValues(outcome).Inc()
+		p.metrics.AttemptLatency.WithLabelValues(outcome).Observe(dur.Seconds())
 	}
 	ms := int32(dur.Milliseconds())
 	if err := p.store.Q.InsertAttempt(ctx, db.InsertAttemptParams{

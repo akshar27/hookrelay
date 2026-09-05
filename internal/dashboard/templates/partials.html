@@ -1,0 +1,27 @@
+{{define "deliveriesTable"}}
+<div class="scroll-x">
+<table>
+  <thead><tr><th>Created</th><th>Delivery</th><th>Endpoint</th><th>Status</th><th>Attempts</th><th>Last code</th></tr></thead>
+  <tbody>
+    {{range .}}
+    <tr>
+      <td class="mono">{{.Created}}</td>
+      <td class="mono"><a href="/deliveries/{{.ID}}">{{slice8 .ID}}</a>{{if .IsReplay}} <span class="pill info">replay</span>{{end}}</td>
+      <td>{{.EndpointName}}</td>
+      <td>{{template "deliveryPill" .Status}}</td>
+      <td class="mono">{{.AttemptCount}}</td>
+      <td class="mono">{{if .LastStatusCode}}{{.LastStatusCode}}{{else}}—{{end}}</td>
+    </tr>
+    {{else}}
+    <tr><td colspan="6" class="muted">no deliveries match</td></tr>
+    {{end}}
+  </tbody>
+</table>
+</div>
+{{end}}
+
+{{define "deliveryPill"}}<span class="pill {{if eq . "succeeded"}}ok{{else if eq . "dead"}}bad{{else if eq . "blocked"}}warn{{else if eq . "failed"}}warn{{else}}info{{end}}">{{.}}</span>{{end}}
+
+{{define "statusPill"}}<span class="pill {{if eq . "enabled"}}ok{{else if eq . "paused"}}warn{{else}}bad{{end}}">{{.}}</span>{{end}}
+{{define "circuitPill"}}<span class="pill {{if eq . "closed"}}ok{{else if eq . "half_open"}}warn{{else}}bad{{end}}">{{.}}</span>{{end}}
+{{define "outcomePill"}}<span class="pill {{if eq . "success"}}ok{{else if eq . "throttled"}}info{{else}}bad{{end}}">{{.}}</span>{{end}}

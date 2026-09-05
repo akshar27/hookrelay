@@ -1,0 +1,20 @@
+{{define "content"}}
+<div class="panel">
+  <h2>Deliveries</h2>
+  <form class="filters" hx-get="/deliveries" hx-target="#feed" hx-select="#feed" hx-swap="outerHTML" hx-push-url="true">
+    <select name="status">
+      <option value="">any status</option>
+      {{range .Statuses}}<option value="{{.}}" {{if eq . $.Filter.Status}}selected{{end}}>{{.}}</option>{{end}}
+    </select>
+    <select name="endpoint_id">
+      <option value="">any endpoint</option>
+      {{range .Endpoints}}<option value="{{.ID}}" {{if eq .ID.String $.Filter.EndpointID}}selected{{end}}>{{.Name}}</option>{{end}}
+    </select>
+    <button type="submit">Filter</button>
+  </form>
+  <div id="feed">
+    {{template "deliveriesTable" .Rows}}
+    {{if .NextCursor}}<p><a href="/deliveries?{{.NextQuery}}">next page →</a></p>{{end}}
+  </div>
+</div>
+{{end}}

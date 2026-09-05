@@ -4,10 +4,12 @@ package api
 import (
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/akshar27/hookrelay/internal/breaker"
 	"github.com/akshar27/hookrelay/internal/config"
+	"github.com/akshar27/hookrelay/internal/dashboard"
 	"github.com/akshar27/hookrelay/internal/obs"
 	"github.com/akshar27/hookrelay/internal/secretbox"
 	"github.com/akshar27/hookrelay/internal/store"
@@ -20,31 +22,54 @@ import (
 
 // Server wires configuration, storage, and observability into an http.Handler.
 type Server struct {
-	cfg      config.Config
-	store    *store.Store
-	log      *slog.Logger
-	metrics  *obs.Metrics
-	secrets  *secretbox.Box
-	notifier EventNotifier
-	breakers *breaker.Registry
-	reg      *prometheus.Registry
-	handler  http.Handler
+	cfg       config.Config
+	store     *store.Store
+	log       *slog.Logger
+	metrics   *obs.Metrics
+	secrets   *secretbox.Box
+	notifier  EventNotifier
+	breakers  *breaker.Registry
+	dashboard http.Handler
+	reg       *prometheus.Registry
+	handler   http.Handler
 }
 
-// New builds a Server and its route tree. notifier and breakers may be nil.
-func New(cfg config.Config, st *store.Store, box *secretbox.Box, breakers *breaker.Registry, log *slog.Logger, notifier EventNotifier) (*Server, error) {
-	reg := prometheus.NewRegistry()
+// Deps are the collaborators a Server needs. notifier and breakers may be nil.
+type Deps struct {
+	Store    *store.Store
+	Secrets  *secretbox.Box
+	Breakers *breaker.Registry
+	Notifier EventNotifier
+	Metrics  *obs.Metrics
+	Registry *prometheus.Registry
+	Log      *slog.Logger
+}
+
+// New builds a Server and its route tree.
+func New(cfg config.Config, d Deps) (*Server, error) {
+	reg := d.Registry
+	if reg == nil {
+		reg = prometheus.NewRegistry()
+	}
 	reg.MustRegister(collectors.NewGoCollector(), collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
+
+	metrics := d.Metrics
+	if metrics == nil {
+		metrics = obs.NewMetrics(reg)
+	}
 
 	s := &Server{
 		cfg:      cfg,
-		store:    st,
-		log:      log,
-		metrics:  obs.NewMetrics(reg),
-		secrets:  box,
-		notifier: notifier,
-		breakers: breakers,
+		store:    d.Store,
+		log:      d.Log,
+		metrics:  metrics,
+		secrets:  d.Secrets,
+		notifier: d.Notifier,
+		breakers: d.Breakers,
 		reg:      reg,
+	}
+	if cfg.AdminToken != "" && d.Store != nil {
+		s.dashboard = dashboard.New(d.Store, d.Breakers, d.Secrets, cfg.AdminToken).Router()
 	}
 	s.handler = s.routes()
 	return s, nil
@@ -86,7 +111,15 @@ func (s *Server) routes() http.Handler {
 		})
 	})
 
-	r.NotFound(func(w http.ResponseWriter, _ *http.Request) { writeErr(w, errNotFound) })
+	// Anything not an API/ops route falls through to the operator dashboard
+	// (its own router handles "/", "/deliveries", "/assets/*", … and its 404).
+	r.NotFound(func(w http.ResponseWriter, req *http.Request) {
+		if s.dashboard != nil && !strings.HasPrefix(req.URL.Path, "/v1/") {
+			s.dashboard.ServeHTTP(w, req)
+			return
+		}
+		writeErr(w, errNotFound)
+	})
 	r.MethodNotAllowed(func(w http.ResponseWriter, _ *http.Request) {
 		writeErr(w, errf(http.StatusMethodNotAllowed, "hookrelay_method_not_allowed", "method not allowed"))
 	})

@@ -1,0 +1,24 @@
+{{define "layout"}}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HookRelay — {{.Title}}</title>
+  <link rel="stylesheet" href="/assets/style.css">
+  <script src="/assets/htmx.min.js" defer></script>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>HookRelay</h1>
+    <span class="sub">webhook delivery</span>
+  </header>
+  <nav>
+    <a href="/" class="{{if eq .Nav "overview"}}active{{end}}">overview</a>
+    <a href="/deliveries" class="{{if eq .Nav "deliveries"}}active{{end}}">deliveries</a>
+    <a href="/events" class="{{if eq .Nav "events"}}active{{end}}">events</a>
+  </nav>
+  {{template "content" .}}
+</div>
+</body>
+</html>{{end}}

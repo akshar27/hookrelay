@@ -1,0 +1,23 @@
+{{define "content"}}
+<div class="panel">
+  <h2>Events</h2>
+  <div class="scroll-x">
+  <table>
+    <thead><tr><th>Received</th><th>ID</th><th>Type</th><th>Deliveries</th></tr></thead>
+    <tbody>
+      {{range .Rows}}
+      <tr>
+        <td class="mono">{{.Received}}</td>
+        <td class="mono"><a href="/events/{{.ID}}">{{slice8 .ID}}</a></td>
+        <td class="mono">{{.Type}}</td>
+        <td class="mono">{{.Deliveries}}</td>
+      </tr>
+      {{else}}
+      <tr><td colspan="4" class="muted">no events yet</td></tr>
+      {{end}}
+    </tbody>
+  </table>
+  </div>
+  {{if .NextCursor}}<p><a href="/events?cursor={{.NextCursor}}">next page →</a></p>{{end}}
+</div>
+{{end}}

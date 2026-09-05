@@ -43,7 +43,9 @@ func newTestEnv(t *testing.T) testEnv {
 	require.NoError(t, err)
 	brk := breaker.NewRegistry()
 	cfg := config.Config{Env: "test", AdminToken: "test-admin-token", AllowInsecureEndpoints: true}
-	srv, err := api.New(cfg, st, box, brk, logger, d)
+	srv, err := api.New(cfg, api.Deps{
+		Store: st, Secrets: box, Breakers: brk, Notifier: d, Log: logger,
+	})
 	require.NoError(t, err)
 	return testEnv{h: srv.Handler(), st: st, d: d, box: box, brk: brk, log: logger}
 }

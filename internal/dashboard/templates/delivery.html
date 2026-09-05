@@ -1,0 +1,41 @@
+{{define "content"}}
+<div class="panel">
+  <h2>Delivery {{slice8 .D.ID}} {{template "deliveryPill" .D.Status}}</h2>
+  <div class="kv">
+    <span class="k">id</span><span class="mono">{{.D.ID}}</span>
+    <span class="k">event</span><span class="mono"><a href="/events/{{.D.EventID}}">{{.D.EventID}}</a></span>
+    <span class="k">endpoint</span><span><a href="/endpoints/{{.D.EndpointID}}">{{.EndpointName}}</a></span>
+    <span class="k">attempts</span><span class="mono">{{.D.AttemptCount}}</span>
+    <span class="k">last error</span><span class="mono">{{if .D.LastError}}{{.D.LastError}}{{else}}—{{end}}</span>
+    {{if .D.IsReplay}}<span class="k">replay of</span><span class="mono">{{.D.ReplayOf}}</span>{{end}}
+  </div>
+  <div class="actions">
+    <button class="primary" hx-post="/deliveries/{{.D.ID}}/replay" hx-swap="none"
+      hx-on::after-request="location.reload()">Replay</button>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>Attempt timeline</h2>
+  <div class="scroll-x">
+  <table>
+    <thead><tr><th>#</th><th>When</th><th>Outcome</th><th>Code</th><th>ms</th><th>Response</th></tr></thead>
+    <tbody>
+      {{range .Attempts}}
+      <tr>
+        <td class="mono">{{.N}}</td>
+        <td class="mono">{{.When}}</td>
+        <td>{{template "outcomePill" .Outcome}}</td>
+        <td class="mono">{{if .StatusCode}}{{.StatusCode}}{{else}}—{{end}}</td>
+        <td class="mono">{{.DurationMS}}</td>
+        <td>{{if .Snippet}}<div class="snippet">{{.Snippet}}</div>{{else}}<span class="muted">—</span>{{end}}</td>
+      </tr>
+      {{else}}
+      <tr><td colspan="6" class="muted">no attempts yet</td></tr>
+      {{end}}
+    </tbody>
+  </table>
+  </div>
+</div>
+{{end}}
+
