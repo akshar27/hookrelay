@@ -1,7 +1,14 @@
 // Package ssrf classifies destination addresses and validates endpoint URLs so
 // HookRelay never delivers to loopback, private, link-local, or cloud-metadata
-// addresses. Used at endpoint-create time (URL literal) and again at
-// delivery time after DNS resolution (M5), which defeats DNS rebinding.
+// addresses. Three layers:
+//
+//   - ValidateURL at endpoint-create time (rejects IP-literal hosts in bad ranges).
+//   - ResolveAndCheck on the delivery path for a friendly early rejection
+//     (dead-letters a webhook whose DNS now points somewhere blocked).
+//   - GuardedDialContext (dial.go) is the actual security boundary: it checks
+//     the resolved IP in the dialer's ControlContext, immediately before the
+//     socket connects, so a DNS record that changes between the pre-flight
+//     lookup and the connection cannot be exploited (DNS rebinding).
 package ssrf
 
 import (

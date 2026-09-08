@@ -88,6 +88,11 @@ func New(st *store.Store, secrets *secretbox.Box, notifier Notifier, log *slog.L
 	if client == nil {
 		client = &http.Client{
 			Transport: &http.Transport{
+				// The SSRF boundary: refuse the socket if the *resolved* IP is
+				// blocked, checked at connect time so a rebinding DNS record
+				// can't slip past a separate pre-flight lookup. Honors
+				// ssrf.WithAllowPrivate(ctx, ...) set per delivery below.
+				DialContext:         ssrf.GuardedDialContext(nil),
 				MaxIdleConns:        100,
 				MaxIdleConnsPerHost: 10,
 				IdleConnTimeout:     90 * time.Second,
@@ -268,6 +273,7 @@ func (p *Pool) deliver(ctx context.Context, deliveryID uuid.UUID) {
 	timeout := time.Duration(d.TimeoutMs) * time.Millisecond
 	reqCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
+	reqCtx = ssrf.WithAllowPrivate(reqCtx, d.AllowPrivate)
 
 	req, _ := http.NewRequestWithContext(reqCtx, http.MethodPost, d.Url, strings.NewReader(string(body)))
 	req.Header.Set("Content-Type", "application/json")
@@ -283,6 +289,18 @@ func (p *Pool) deliver(ctx context.Context, deliveryID uuid.UUID) {
 	headers := redactedHeaders(req.Header)
 
 	switch {
+	case err != nil && isSSRFBlock(err):
+		// The dialer refused the resolved IP (rebinding / TOCTOU). Not transient
+		// — dead-letter it now rather than burn retries on a hostile target.
+		p.recordAttempt(ctx, d, headers, nil, "", duration, "ssrf_blocked", err.Error())
+		_ = p.store.Q.MarkDeliveryDead(ctx, db.MarkDeliveryDeadParams{
+			ID: deliveryID, LastError: strptr(err.Error()),
+		})
+		p.emitDead(ctx, d, nil)
+		p.breakers.RecordFailure(d.EndpointID, bcfg)
+		p.snapshotBreaker(ctx, d, bcfg)
+		log.Warn("delivery blocked by SSRF dialer", "err", err)
+
 	case err != nil:
 		outcome, reason := classifyErr(err)
 		p.recordAttempt(ctx, d, headers, nil, "", duration, outcome, err.Error())
@@ -436,6 +454,13 @@ func (p *Pool) ReapOnce(ctx context.Context) int {
 }
 
 // --- helpers -------------------------------------------------------------
+
+// isSSRFBlock reports whether err came from the guarded dialer refusing a
+// blocked destination IP (it wraps *ssrf.Error via url.Error → net.OpError).
+func isSSRFBlock(err error) bool {
+	var se *ssrf.Error
+	return errors.As(err, &se)
+}
 
 func classifyErr(err error) (outcome, reason string) {
 	var netErr net.Error

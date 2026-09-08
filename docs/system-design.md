@@ -86,10 +86,13 @@ operator dashboard.
   or `→ open` (else). While open, deliveries to that endpoint are not attempted.
 - **Rate limit per endpoint**: token bucket at `rate_limit_rps`; a delivery that
   would exceed it is re-scheduled a few hundred ms out instead of dropped.
-- **SSRF guard**: reject endpoint URLs (at create time *and* at delivery time,
-  after DNS resolution) that resolve to loopback, link-local, private, or
-  cloud-metadata (`169.254.169.254`) addresses, unless an allowlist opt-in is
-  set (for local testing).
+- **SSRF guard**: three layers — URL-literal check at create time; a
+  delivery-time DNS re-resolve that dead-letters an endpoint now pointing at a
+  blocked range; and the HTTP transport's `DialContext`/`ControlContext`, which
+  re-validates the resolved IP immediately before `connect(2)` so the checked
+  address is the connected address (DNS-rebinding safe). Blocks loopback,
+  link-local, private, and cloud-metadata (`169.254.169.254`) unless a
+  per-endpoint `allow_private` opt-in is set (local testing).
 - **Replay**: `POST /v1/deliveries/{id}/replay` (new delivery, fresh attempt
   counter) and `POST /v1/events/{id}/replay` (re-fan-out to all currently
   matching endpoints).

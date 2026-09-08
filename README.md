@@ -137,10 +137,16 @@ accept if Webhook-Signature contains "v1,<expected>" AND |now - Webhook-Timestam
   A periodic snapshot to the `endpoints` table feeds the dashboard; the
   in-process map is the authority. v2 moves it to Redis. This is a deliberate
   scope cut, not an oversight.
-- **SSRF is checked twice.** At endpoint-create time on the URL literal, and
-  again at *delivery* time after DNS resolution — so a hostname that resolves
-  to `10.0.0.5` or `169.254.169.254` is rejected even if it was public when the
-  endpoint was registered.
+- **SSRF: layered, and the dialer is the boundary.** (1) endpoint-create checks
+  the URL literal; (2) a delivery-time DNS re-resolve dead-letters an endpoint
+  whose record now points somewhere blocked; (3) the HTTP transport's
+  `DialContext` re-checks the *resolved IP in `ControlContext`, immediately
+  before `connect(2)`* — so the IP that's validated is the IP that's dialed.
+  Layers 1–2 are convenience; layer 3 is what actually closes the
+  resolve-then-connect (DNS-rebinding) window a separate pre-flight lookup
+  leaves open. `internal/ssrf/dial_test.go` proves it: a client with the
+  guarded dialer refuses a loopback `httptest.Server` even though the URL host
+  *is* `127.0.0.1`.
 - **API keys: fast hash, split key.** `hr_<lookupId><random>` — SHA-256 of the
   whole key for a constant-time compare, the non-secret `lookupId` prefix
   indexes the row. High-entropy keys don't need a slow KDF; signing secrets

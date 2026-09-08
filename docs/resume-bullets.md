@@ -26,8 +26,10 @@ unless you benchmark.
   breaker.
 - Got the **security and operability** details right: Standard Webhooks
   HMAC-SHA256 signing with a timestamp tolerance, AES-256-GCM sealed signing
-  secrets, and an **SSRF guard that re-resolves the destination host at delivery
-  time** (DNS-rebinding aware). Plus an HTMX + `html/template` dashboard
+  secrets, and an **SSRF guard that validates the resolved IP in the HTTP
+  dialer's `ControlContext`** — the check runs on the socket about to connect,
+  closing the DNS-rebinding window a separate pre-flight lookup leaves open.
+  Plus an HTMX + `html/template` dashboard
   (delivery feed, per-attempt timeline, one-click replay, pause / circuit
   reset), Prometheus metrics, embedded goose migrations, ~50 tests
   (`httptest` + testcontainers-go), and CI.
