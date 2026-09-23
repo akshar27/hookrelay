@@ -1,27 +1,27 @@
 # Fly.io config. The app is a plain Docker image configured through env vars —
 # nothing here is Fly-specific, so any container host works (see docs/deploy.md).
-app = "hookrelay"
-primary_region = "sjc"
+# "hookrelay" (unqualified) was already taken by another Fly account.
+app = 'hookrelay-akshar'
+primary_region = 'sjc'
 
 [build]
-
 [env]
-  HOOKRELAY_ENV = "production"
+  HOOKRELAY_ENV = 'production'
 
 [http_service]
   internal_port = 8080
   force_https = true
-  auto_stop_machines = "stop"
+  auto_stop_machines = 'stop'
   auto_start_machines = true
   min_machines_running = 0
 
   [[http_service.checks]]
-    method = "GET"
-    path = "/readyz"
-    interval = "15s"
-    timeout = "4s"
-    grace_period = "20s"
+    interval = '15s'
+    timeout = '4s'
+    grace_period = '20s'
+    method = 'GET'
+    path = '/readyz'
 
 [[vm]]
-  size = "shared-cpu-1x"
-  memory = "512mb"
+  size = 'shared-cpu-1x'
+  memory = '512mb'

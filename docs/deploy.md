@@ -24,7 +24,7 @@ docker compose --profile app up --build      # API + dashboard on :8080
 ## Fly.io
 
 ```bash
-fly launch --no-deploy --copy-config --name hookrelay
+fly launch --no-deploy --copy-config --name hookrelay   # pick your own if "hookrelay" is taken
 
 # Neon gives you postgresql://USER:PASS@HOST/hookrelay?sslmode=require —
 # that's already the form HOOKRELAY_DATABASE_URL wants.
@@ -43,7 +43,7 @@ distroless, no JVM/interpreter warmup).
 ### Smoke test
 
 ```bash
-BASE=https://hookrelay.fly.dev
+BASE=https://hookrelay-akshar.fly.dev   # "hookrelay" alone was taken on Fly
 ADMIN="Authorization: Bearer <the HOOKRELAY_ADMIN_TOKEN you set>"
 
 curl -s $BASE/healthz                                    # {"status":"ok"}
